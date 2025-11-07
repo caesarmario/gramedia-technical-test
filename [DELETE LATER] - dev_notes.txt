@@ -1,6 +1,7 @@
 TO DO:
 [P1]
 - tambahkan try except di setiap scriptnya
+- untuk carts, ditambahin satu proses etl utils sendiri (function) dan template jinja if...
 
 [P2]
 - Sample output

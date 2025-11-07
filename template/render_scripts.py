@@ -117,6 +117,73 @@ def gendagextract():
             f.write(content)
         click.echo(f"Rendered DAG → {dag_out}")
 
+
+@cli.command()
+def gendagtransform():
+    """
+    Render the Transform DAGs:
+    - Orchestrator: 01_dag_{project}_transform_orchestrator.py
+    - Per resource: 01_{order}_dag_{project}_transform_{resource}.py
+    """
+    orc_tpl_name = "transform_orchestrator_fakestore_dag.py.j2"
+    dag_tpl_name = "transform_fakestore_dag.py.j2"
+
+    # Reuse the same resources config used by extract
+    cfg_path = "template/dag/config/extract_fakestore_resources.yaml"
+    cfg = get_config(cfg_path)
+
+    project = cfg.get("project")
+    resources = cfg.get("resources") or []
+
+    # Ensure each resource has a stable order (1-based)
+    enriched = []
+    for i, r in enumerate(resources, start=1):
+        rr = dict(r)
+        rr.setdefault("order", i)
+        enriched.append(rr)
+
+    tpl_dir = "template/dag"
+    orc_template = get_template(tpl_dir, orc_tpl_name)
+    dag_template = get_template(tpl_dir, dag_tpl_name)
+
+    # Provide Jinja-friendly macros for ds and dag_run.conf.get('ds', ds)
+    ds_literal = "{{ ds }}"
+
+    class _MacroConf:
+        def get(self, *_, **__):
+            return "{{ dag_run.conf.get('ds', ds) }}"
+
+    class _MacroDagRun:
+        def __init__(self):
+            self.conf = _MacroConf()
+
+    ctx_common = {
+        "project": project,
+        "resources": enriched,
+        "ds": ds_literal,
+        "dag_run": _MacroDagRun(),
+    }
+
+    outdir = os.path.join("airflow", "dags")
+    os.makedirs(outdir, exist_ok=True)
+
+    # Orchestrator
+    orch_out = os.path.join(outdir, f"01_dag_{project}_transform_orchestrator.py")
+    with open(orch_out, "w", encoding="utf-8") as f:
+        f.write(orc_template.render(ctx_common))
+    click.echo(f"Rendered orchestrator → {orch_out}")
+
+    # Per-resource DAGs
+    for r in enriched:
+        content = dag_template.render({**ctx_common, "resource": r})
+        dag_out = os.path.join(
+            outdir,
+            f"01_{r['order']:02d}_dag_{project}_transform_{r['name']}.py",
+        )
+        with open(dag_out, "w", encoding="utf-8") as f:
+            f.write(content)
+        click.echo(f"Rendered DAG → {dag_out}")
+
 # --------------------------------------------------------------------------------
 # ETL script rendering command
 # --------------------------------------------------------------------------------
@@ -161,7 +228,7 @@ def genscriptextract():
 
 
 @cli.command()
-def genscripttransform() -> None:
+def genscripttransform():
     cfg_path = "template/script/config/extract_fakestore_config.yaml"
     cfg = get_config(cfg_path)
 

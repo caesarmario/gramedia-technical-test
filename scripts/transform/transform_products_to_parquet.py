@@ -43,7 +43,7 @@ def main() -> None:
 
     # Buckets
     bucket_raw = creds.get("MINIO_BUCKET_RAW")
-    bucket_stg = creds.get("MINIO_BUCKET_STAGING")
+    bucket_stg = creds.get("MINIO_BUCKET_STG")
 
     # MinIO client
     client = ETLHelper.create_minio_client(creds)
