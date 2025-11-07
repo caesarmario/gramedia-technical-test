@@ -1,0 +1,48 @@
+#### 
+## Gramedia Digital - Data Engineer Take Home Test
+## by Mario Caesar // caesarmario87@gmail.com
+## DAG Orchestrator to extract data from FakeStore API
+####
+
+from airflow import DAG
+from airflow.operators.empty import EmptyOperator
+from airflow.operators.trigger_dagrun import TriggerDagRunOperator
+from datetime import datetime, timedelta
+
+default_args = {"owner": "data-eng", "retries": 0}
+
+with DAG(
+    dag_id          = "00_dag_{{ project }}_orchestrator",
+    schedule        = "0 * * * *",
+    start_date      = datetime(2025, 1, 1),
+    catchup         = False,
+    max_active_runs = 1,
+    default_args    = default_args,
+    tags            = ["{{ project }}","orchestrator","extract"],
+) as dag:
+
+    t00_start = EmptyOperator(task_id="t00_start")
+
+    triggers = []
+    {% for r in resources %}
+    {# samakan pola dengan dag_id di extract: 00_{order}_dag_{project}_extract_{name} #}
+    {% set dag_num   = "%02d"|format(r.order) %}
+    {% set target_id = "00_" ~ dag_num ~ "_dag_" ~ project ~ "_extract_" ~ r.name %}
+
+    t_trigger_{{ r.name }} = TriggerDagRunOperator(
+        task_id             = "t10_trigger_extract_{{ r.name }}",
+        trigger_dag_id      = "{{ target_id }}",
+        conf                = {"ds": "{{ ds }}"},
+        wait_for_completion = True,
+        reset_dag_run       = True,
+        poke_interval       = 30,
+        allowed_states      = ["success"],
+        failed_states       = ["failed"],
+    )
+    triggers.append(t_trigger_{{ r.name }})
+    {% endfor %}
+
+    t90_finish = EmptyOperator(task_id="t90_finish")
+
+    # Parallel (default) — kalau mau sequential, chain satu-satu di render_scripts
+    t00_start >> triggers >> t90_finish

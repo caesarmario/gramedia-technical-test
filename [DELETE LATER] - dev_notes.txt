@@ -1,0 +1,26 @@
+TO DO:
+[P1]
+- Buat bucket minio
+
+[P3]
+- Include visualizations or metrics summary in a notebook.
+- Render scripts py
+- Comment dan masing masing function comment (how to use, human writings)
+- alert di telegram?
+
+
+## Airflow pass:
+mHFyTxsbeuhkwd8P
+
+## Minio bucket name
+raw-fakestore
+
+
+## Config
+MINIO_CONFIG
+{
+  "MINIO_ENDPOINT": "minio:9000",
+  "MINIO_ROOT_USER": "admin",
+  "MINIO_ROOT_PASSWORD": "admin123",
+  "MINIO_BUCKET_RAW": "raw-fakestore"
+}

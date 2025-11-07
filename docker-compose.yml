@@ -1,0 +1,85 @@
+####
+## Gramedia Digital - Data Engineer Take Home Test
+## by Mario Caesar // caesarmario87@gmail.com
+## Docker Compose
+####
+
+services:
+  airflow:
+    build:
+      context: .
+      dockerfile: ${PWD}/docker/Dockerfile
+    env_file:
+      - ${PWD}/docker/.env
+    environment:
+      - AIRFLOW__CORE__AIRFLOW_HOME=/opt/airflow
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://${AIRFLOW_DB_USER}:${AIRFLOW_DB_PASS}@${AIRFLOW_DB_HOST}:5432/${AIRFLOW_DB_NAME}
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW_VAR_PROJECT_ROOT=/opt/project
+      - PYTHONPATH=/opt/project
+    volumes:
+      - ${PWD}/airflow/dags:/opt/airflow/dags
+      - ${PWD}/airflow/logs:/opt/airflow/logs
+      - ${PWD}/airflow/plugins:/opt/airflow/plugins
+      - ${PWD}/:/opt/project:delegated
+      - ${PWD}/scripts/dbt:/dbt
+    working_dir: /opt/project
+    ports:
+      - "${AIRFLOW_PORT}:8080"
+    depends_on:
+      - postgres
+      - minio
+    command: ["bash","-c","exec airflow standalone"]
+
+  postgres:
+    image: postgres:latest
+    env_file:
+      - ${PWD}/docker/.env
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./docker/initdb:/docker-entrypoint-initdb.d
+    ports:
+      - "${POSTGRES_PORT}:5432"
+
+  minio:
+    image: minio/minio
+    container_name: minio
+    command: server /data --console-address ":9001"
+    env_file:
+      - ${PWD}/docker/.env
+    ports:
+      - "${MINIO_API_PORT}:9000"
+      - "${MINIO_CONSOLE_PORT}:9001"
+    environment:
+      - MINIO_KMS_SECRET_KEY=${MINIO_KMS_SECRET_KEY}
+    volumes:
+      - minio-data:/data
+
+  dbt_postgres:
+    image: ghcr.io/dbt-labs/dbt-postgres:1.6.0
+    container_name: dbt_postgres
+    volumes:
+      - ${PWD}/scripts/dbt:/dbt
+    working_dir: /dbt
+    entrypoint: ["tail", "-f", "/dev/null"]
+    depends_on:
+      - postgres
+
+  greatexpectations:
+    image: python:3.10
+    container_name: great_expectations
+    volumes:
+      - ${PWD}/great_expectations:/app
+    working_dir: /app
+    entrypoint: ["bash", "-c", "pip install 'great_expectations==1.5.2' 'SQLAlchemy==1.4.*' && tail -f /dev/null"]
+    depends_on:
+      - postgres
+    command: tail -f /dev/null
+
+volumes:
+  postgres-data:
+  minio-data:

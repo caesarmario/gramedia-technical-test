@@ -1,0 +1,13 @@
+extract:
+  products:
+    class_name: Products
+    resource_name: products
+    endpoint_path: products
+  carts:
+    class_name: Carts
+    resource_name: carts
+    endpoint_path: carts
+  users:
+    class_name: Users
+    resource_name: users
+    endpoint_path: users

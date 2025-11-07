@@ -1,0 +1,9 @@
+project: fakestore
+base_url: https://fakestoreapi.com
+resources:
+  - name: products
+    endpoint: /products
+  - name: carts
+    endpoint: /carts
+  - name: users
+    endpoint: /users
