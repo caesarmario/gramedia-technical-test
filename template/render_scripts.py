@@ -159,5 +159,41 @@ def genscriptextract():
 
     click.echo("Done rendering ETL scripts.")
 
+
+@cli.command()
+def genscripttransform() -> None:
+    cfg_path = "template/script/config/extract_fakestore_config.yaml"
+    cfg = get_config(cfg_path)
+
+    extract = (cfg or {}).get("extract", {})
+    if not extract:
+        click.echo(f"No resources found in {cfg_path}", err=True)
+        return
+
+    tpl_dir = "template/script"
+    tpl_name = "transform_fakestore_to_parquet.py.j2"
+    template = get_template(tpl_dir, tpl_name)
+
+    outdir = os.path.join("scripts", "transform")
+    os.makedirs(outdir, exist_ok=True)
+
+    for key, r in extract.items():
+        # prefer explicit resource_name from config; fallback to dict key
+        res_name = (r or {}).get("resource_name") or key
+        endpoint = (r or {}).get("endpoint_path") or ""
+
+        ctx = {
+            "resource": {
+                "name": res_name,
+                "endpoint_path": endpoint,
+            }
+        }
+
+        out_path = os.path.join(outdir, f"transform_{res_name}_to_parquet.py")
+        with open(out_path, "w", encoding="utf-8") as f:
+            f.write(template.render(ctx))
+        click.echo(f"Rendered transform script → {out_path}")
+
+
 if __name__ == "__main__":
     cli()

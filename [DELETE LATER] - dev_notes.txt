@@ -1,9 +1,17 @@
 TO DO:
 [P1]
-- Buat bucket minio
+- Sample output
+
+[P2]
+- README
+    - Setup instructions. 
+    - Description of ETL logic. 
+    - Explanation of data validation. 
+    - Diagram of your pipeline.
+- supaya bisa backfill bagaimana
+- Include visualizations or metrics summary in a notebook.
 
 [P3]
-- Include visualizations or metrics summary in a notebook.
 - Render scripts py
 - Comment dan masing masing function comment (how to use, human writings)
 - alert di telegram?
@@ -14,7 +22,7 @@ mHFyTxsbeuhkwd8P
 
 ## Minio bucket name
 raw-fakestore
-
+stg-fakestore
 
 ## Config
 MINIO_CONFIG
@@ -23,4 +31,5 @@ MINIO_CONFIG
   "MINIO_ROOT_USER": "admin",
   "MINIO_ROOT_PASSWORD": "admin123",
   "MINIO_BUCKET_RAW": "raw-fakestore"
+  "MINIO_BUCKET_STG": "stg-fakestore"
 }

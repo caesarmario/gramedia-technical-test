@@ -1,0 +1,21 @@
+{
+  "_config": {
+    "table": "products",
+    "array_path": "data",
+    "primary_key": ["product_id"],
+    "partition_by": ["load_dt"]
+  },
+  "product_id": { "mapping": "id", "data_type": "INTEGER", "transformation": null, "validation": "not_null" },
+  "title":       { "mapping": "title", "data_type": "STRING",  "transformation": "normalize_whitespace", "validation": null },
+  "category":    { "mapping": "category", "data_type": "STRING", "transformation": "trim_lower", "validation": null },
+  "category_slug": { "mapping": "category", "data_type": "STRING", "transformation": "slugify", "validation": null },
+  "price":       { "mapping": "price", "data_type": "FLOAT",   "transformation": null, "validation": "non_negative" },
+  "description": { "mapping": "description", "data_type": "STRING", "transformation": "strip_html", "validation": null },
+  "image_url":   { "mapping": "image", "data_type": "STRING",  "transformation": null, "validation": "validate_url" },
+  "rating_rate": { "mapping": "rating.rate", "data_type": "FLOAT", "transformation": null, "validation": "range_0_5" },
+  "rating_count":{ "mapping": "rating.count", "data_type": "INTEGER", "transformation": null, "validation": "non_negative_integer" },
+  "source_url":  { "mapping": "meta.source", "data_type": "STRING", "transformation": null, "validation": null },
+  "fetched_at":  { "mapping": "meta.fetched_at", "data_type": "DATETIME", "transformation": null, "validation": "validate_timestamp" },
+  "batch_id":    { "mapping": "batch_id", "data_type": "STRING", "transformation": null, "validation": null },
+  "load_dt":     { "mapping": "load_dt", "data_type": "TIMESTAMP", "transformation": null, "validation": null }
+}
