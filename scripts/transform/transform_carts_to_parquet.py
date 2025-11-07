@@ -65,7 +65,8 @@ def main() -> None:
 
     # Transform
     df = ETLHelper.records_to_dataframe(records)
-    df = ETLHelper.apply_config(df, cfg)  # select/rename/explode/casts/fill/drop/simple derives
+    df = ETLHelper._explode_carts_products(df)          # baris-per-item
+    df = ETLHelper.apply_config_carts(df, cfg)          # tanpa duplikasi products.*
     df["ds"] = pd.to_datetime(ds)
 
     # Write Parquet to staging

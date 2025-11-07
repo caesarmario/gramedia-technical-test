@@ -2,9 +2,10 @@ TO DO:
 [P1]
 - tambahkan try except di setiap scriptnya
 - untuk carts, ditambahin satu proses etl utils sendiri (function) dan template jinja if...
+- cek fungsi di etl utils yang gak kepakai --> buang
 
 [P2]
-- Sample output
+- Sample output folder
 - README
     - Setup instructions. 
     - Description of ETL logic. 
@@ -12,6 +13,7 @@ TO DO:
     - Diagram of your pipeline.
 - supaya bisa backfill bagaimana
 - Include visualizations or metrics summary in a notebook.
+    - baiknya buat visualisasi datanya dari output folder atau konek ke docker(?)
 
 [P3]
 - Render scripts py

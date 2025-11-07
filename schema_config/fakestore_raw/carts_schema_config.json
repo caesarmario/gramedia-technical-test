@@ -11,12 +11,7 @@
   "cart_id":    { "mapping": "id",                  "data_type": "INTEGER"  },
   "user_id":    { "mapping": "userId",              "data_type": "INTEGER"  },
   "order_date": { "mapping": "date",                "data_type": "DATETIME" },
-
   "product_id": { "mapping": "products.productId",  "data_type": "INTEGER"  },
   "quantity":   { "mapping": "products.quantity",   "data_type": "INTEGER"  },
-
-  "source_url": { "mapping": "meta.source",         "data_type": "STRING"   },
-  "fetched_at": { "mapping": "meta.fetched_at",     "data_type": "DATETIME" },
-  "batch_id":   { "mapping": "batch_id",            "data_type": "STRING"   },
   "ds":         { "mapping": "ds",                  "data_type": "DATE"     }
 }

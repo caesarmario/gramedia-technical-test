@@ -14,8 +14,8 @@ from typing import Any, Dict
 
 from airflow import DAG
 from airflow.models import Variable
-from airflow.operators.empty import EmptyOperator
-from airflow.operators.python import PythonOperator
+from airflow.providers.standard.operators.empty import EmptyOperator
+from airflow.providers.standard.operators.python import PythonOperator
 
 
 default_args = {

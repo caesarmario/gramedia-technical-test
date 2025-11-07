@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import pandas as pd
+import ast
 
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 from datetime import datetime
@@ -503,3 +504,161 @@ class ETLHelper:
         if t in ("str", "string", "text"):
             return s.astype("string")
         return s
+    
+
+    @staticmethod
+    def _explode_carts_products(df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Carts-only:
+        - Explode 'products' (list of {productId, quantity}) -> satu baris per item.
+        - SIMPAN kolom 'products' sebagai dict (agar path nested 'products.productId' bisa di-resolve),
+        dan BUAT juga kolom datar 'products.productId' & 'products.quantity'.
+        - Tahan kasus None/NaN/string-json/string-literal.
+        """
+        if "products" not in df.columns:
+            return df.copy()
+
+        base_cols = [c for c in df.columns if c != "products"]
+        out_rows: list[dict] = []
+
+        def _to_list(obj):
+            # Sudah list
+            if isinstance(obj, list):
+                return obj
+            # None / NaN
+            if obj is None or (isinstance(obj, float) and pd.isna(obj)):
+                return []
+            # String -> coba json lalu literal
+            if isinstance(obj, str):
+                for parser in (json.loads, ast.literal_eval):
+                    try:
+                        val = parser(obj)
+                        break
+                    except Exception:
+                        val = None
+                if val is None:
+                    return []
+                return val if isinstance(val, list) else [val]
+            # Satu dict / tipe lain -> bungkus list
+            return [obj]
+
+        for _, rec in df.iterrows():
+            base = {c: rec[c] for c in base_cols}
+            items = _to_list(rec.get("products"))
+
+            if not items:
+                # baris kosong produk (tetap pertahankan bentuk kolom)
+                row = {**base, "products": {}, "products.productId": None, "products.quantity": None}
+                out_rows.append(row)
+                continue
+
+            for it in items:
+                # item bisa saja string; coba parse
+                if isinstance(it, str):
+                    parsed = None
+                    for parser in (json.loads, ast.literal_eval):
+                        try:
+                            parsed = parser(it)
+                            break
+                        except Exception:
+                            parsed = None
+                    it = parsed if isinstance(parsed, dict) else {}
+                elif not isinstance(it, dict):
+                    it = {}
+
+                row = {
+                    **base,
+                    "products": it,  # simpan dict-nya untuk nested-path resolver
+                    "products.productId": it.get("productId"),
+                    "products.quantity": it.get("quantity"),
+                }
+                out_rows.append(row)
+
+        out = pd.DataFrame(out_rows)
+
+        # optional: cast ke numeric aman (biar tidak NaN -> error)
+        if "products.productId" in out.columns:
+            out["products.productId"] = pd.to_numeric(out["products.productId"], errors="coerce")
+        if "products.quantity" in out.columns:
+            out["products.quantity"] = pd.to_numeric(out["products.quantity"], errors="coerce")
+
+        return out
+
+
+    @staticmethod
+    def apply_config_carts(df: pd.DataFrame, cfg: Mapping[str, Any], sep: str = ".") -> pd.DataFrame:
+        """
+        Carts-only apply_config:
+        - Hindari duplikasi `products.productId` vs `products_productId` dengan
+        menghapus kolom dict 'products' sebelum auto-flatten.
+        - Baca format config berbasis 'mapping' + 'data_type' (tanpa 'select').
+        - Susun kolom output hanya sesuai yang didefinisikan di config.
+        """
+        if df.empty:
+            return df.copy()
+
+        # 0) Drop kolom dict 'products' (sudah dipecah via _explode_carts_products)
+        work = df.copy()
+        if "products" in work.columns:
+            work = work.drop(columns=["products"])
+
+        # 1) Auto-flatten dict lain (mis. meta) tapi bukan 'products'
+        work = ETLHelper.auto_flatten_dicts(work, max_depth=2)
+
+        # 2) Kumpulkan definisi kolom dari config (semua key selain yang diawali '_')
+        col_specs: Dict[str, Dict[str, Any]] = {
+            k: v for k, v in cfg.items()
+            if not str(k).startswith("_") and isinstance(v, Mapping)
+        }
+
+        # 3) Helper: coercion tipe dari data_type config
+        def _coerce_series(s: pd.Series, dtype: str) -> pd.Series:
+            t = (dtype or "").strip().lower()
+            if t in ("int", "int64", "integer"):
+                return pd.to_numeric(s, errors="coerce").astype("Int64")
+            if t in ("float", "float64", "double", "number"):
+                return pd.to_numeric(s, errors="coerce")
+            if t in ("bool", "boolean"):
+                return s.map(lambda x: (bool(x) if pd.notna(x) else pd.NA)).astype("boolean")
+            if t in ("datetime", "timestamp", "date"):
+                return pd.to_datetime(s, errors="coerce", utc=False)
+            if t in ("str", "string", "text"):
+                return s.astype("string")
+            return s
+
+        # 4) Bangun output per kolom berdasarkan mapping path
+        out_cols: Dict[str, pd.Series] = {}
+        for out_col, spec in col_specs.items():
+            path = spec.get("mapping", out_col)
+            dtype = spec.get("data_type", "")
+
+            # coba cari kolom langsung (dukung titik/underscore)
+            resolved = ETLHelper._resolve_col(work, path)
+            if resolved:
+                series = work[resolved]
+            else:
+                # fallback: ambil dari nested path per-baris
+                series = work.apply(lambda r: ETLHelper._get_by_path(r.to_dict(), path, sep=sep), axis=1)
+
+            # koersi tipe jika ada
+            if dtype:
+                series = _coerce_series(series, dtype)
+
+            out_cols[out_col] = series
+
+        out = pd.DataFrame(out_cols)
+
+        # 5) Urutan kolom: pakai yang didefinisikan di config (jika ada ‘order’), else prefer default di bawah
+        cfg_order = (cfg.get("_config") or {}).get("order") or []
+        if cfg_order:
+            ordered = [c for c in cfg_order if c in out.columns]
+            tail = [c for c in out.columns if c not in ordered]
+            out = out[ordered + tail]
+        else:
+            preferred = ["cart_id", "user_id", "order_date", "product_id", "quantity",
+                        "source_url", "fetched_at", "batch_id", "ds"]
+            ordered = [c for c in preferred if c in out.columns]
+            tail = [c for c in out.columns if c not in ordered]
+            out = out[ordered + tail]
+
+        return out
