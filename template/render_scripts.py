@@ -184,6 +184,77 @@ def gendagtransform():
             f.write(content)
         click.echo(f"Rendered DAG → {dag_out}")
 
+
+@cli.command()
+def gendagload() -> None:
+    """
+    Render DAGs for the LOAD stage:
+    - Orchestrator:  02_dag_{project}_load_orchestrator.py
+    - Per resource:  02_{order}_dag_{project}_load_{name}.py
+    """
+    # --- Template names ---
+    orc_tpl_name = "load_orchestrator_fakestore_dag.py.j2"
+    dag_tpl_name = "load_fakestore_dag.py.j2"
+
+    # --- Config (reuse the same file used by extract/transform) ---
+    cfg_base = "template/dag/config/extract_fakestore_resources"
+    cfg_path = f"{cfg_base}.yaml"
+    cfg = get_config(cfg_path)
+
+    project: str = cfg.get("project", "fakestore")
+    resources: list[dict] = cfg.get("resources", [])
+
+    # Enrich with stable ordering (1-based)
+    enriched: list[dict] = []
+    for i, r in enumerate(resources, start=1):
+        rr = dict(r)
+        rr.setdefault("order", i)
+        enriched.append(rr)
+
+    # --- Load templates ---
+    tpl_dir = "template/dag"
+    orc_template = get_template(tpl_dir, orc_tpl_name)
+    dag_template = get_template(tpl_dir, dag_tpl_name)
+
+    # Airflow macro placeholders so Jinja in the DAG body resolves correctly
+    ds_literal = "{{ ds }}"
+
+    class _MacroConf:
+        def get(self, *_args, **_kwargs):
+            # keep extract/transform style (allow dag_run.conf['ds'] override)
+            return "{{ dag_run.conf.get('ds', ds) }}"
+
+    class _MacroDagRun:
+        def __init__(self):
+            self.conf = _MacroConf()
+
+    ctx_common = {
+        "project": project,
+        "resources": enriched,
+        "ds": ds_literal,
+        "dag_run": _MacroDagRun(),
+    }
+
+    outdir = os.path.join("airflow", "dags")
+    os.makedirs(outdir, exist_ok=True)
+
+    # --- Orchestrator ---
+    orch_out = os.path.join(outdir, f"02_dag_{project}_load_orchestrator.py")
+    with open(orch_out, "w", encoding="utf-8") as f:
+        f.write(orc_template.render(ctx_common))
+    click.echo(f"Rendered orchestrator → {orch_out}")
+
+    # --- Per-resource DAGs ---
+    for r in enriched:
+        content = dag_template.render({**ctx_common, "resource": r})
+        dag_out = os.path.join(
+            outdir,
+            f"02_{r['order']:02d}_dag_{project}_load_{r['name']}.py",
+        )
+        with open(dag_out, "w", encoding="utf-8") as f:
+            f.write(content)
+        click.echo(f"Rendered DAG → {dag_out}")
+
 # --------------------------------------------------------------------------------
 # ETL script rendering command
 # --------------------------------------------------------------------------------
@@ -260,6 +331,65 @@ def genscripttransform():
         with open(out_path, "w", encoding="utf-8") as f:
             f.write(template.render(ctx))
         click.echo(f"Rendered transform script → {out_path}")
+
+
+@cli.command()
+def genscriptload():
+    """
+    Render loader scripts from Jinja:
+      template: template/script/load_fakestore_parquet_to_pg.py.j2
+      config  : template/script/config/extract_fakestore_config.yaml
+      output  : scripts/load/load_<resource>_parquet_to_pg.py
+    """
+    tpl_dir = "template/script"
+    tpl_name = "load_fakestore_to_l1.py.j2"
+    cfg_path = "template/script/config/extract_fakestore_config.yaml"
+
+    cfg = get_config(cfg_path)
+    resources = cfg.get("extract", {})  # { products: {...}, carts: {...}, users: {...} }
+
+    # sane defaults per resource (override by adding keys into your YAML later if you want)
+    load_defaults = {
+        "products": {
+            "target_table": "dim_products",
+            "pk": ["product_id"],
+            "load_mode": "upsert",
+        },
+        "users": {
+            "target_table": "dim_users",
+            "pk": ["user_id"],
+            "load_mode": "upsert",
+        },
+        "carts": {
+            "target_table": "fct_cart_items",
+            "pk": ["cart_id", "product_id", "ds"],
+            "load_mode": "upsert",
+        },
+    }
+
+    template = get_template(tpl_dir, tpl_name)
+
+    outdir = os.path.join("scripts", "load")
+    os.makedirs(outdir, exist_ok=True)
+
+    for key, spec in resources.items():
+        # prefer explicit resource_name from YAML; else fallback to key
+        name = spec.get("resource_name", key)
+
+        meta = load_defaults.get(name, {})
+        ctx = {
+            "resource": {
+                "name": name,
+                "target_table": meta.get("target_table", name),
+                "pk": meta.get("pk", ["id"]),
+                "load_mode": meta.get("load_mode", "upsert"),
+            }
+        }
+
+        outpath = os.path.join(outdir, f"load_{name}_parquet_to_l1.py")
+        with open(outpath, "w", encoding="utf-8") as f:
+            f.write(template.render(ctx))
+        click.echo(f"Rendered loader → {outpath}")
 
 
 if __name__ == "__main__":

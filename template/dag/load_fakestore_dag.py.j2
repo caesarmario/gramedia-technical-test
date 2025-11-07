@@ -1,0 +1,72 @@
+####
+## Gramedia Digital - Data Engineer Take Home Test
+## by Mario Caesar // caesarmario87@gmail.com
+## DAG: Load "{{ resource.name }}" Parquet → PostgreSQL L1 (psycopg2)
+####
+
+import os, json, subprocess
+
+from airflow import DAG
+from airflow.models import Variable
+from airflow.operators.empty import EmptyOperator
+from airflow.operators.python import PythonOperator
+from datetime import datetime, timedelta
+
+
+default_args = {
+    "owner": "data-eng",
+    "retries": 2,
+    "retry_delay": timedelta(minutes=2),
+}
+
+PROJECT_ROOT: str = Variable.get("PROJECT_ROOT", "/opt/airflow")
+
+def _run_load(exec_ds: str, **_) -> None:
+    """Run the L1 loader via subprocess; pass creds from Airflow Variables."""
+    # MinIO creds
+    raw_minio = Variable.get("MINIO_CONFIG")
+    try:
+        minio_str = json.dumps(json.loads(raw_minio))
+    except Exception:
+        minio_str = raw_minio  # already JSON string
+
+    # Postgres creds
+    raw_pg = Variable.get("POSTGRESQL_CONFIG")
+    try:
+        pg_str = json.dumps(json.loads(raw_pg))
+    except Exception:
+        pg_str = raw_pg
+
+    cmd = [
+        "python", "-m", f"scripts.load.load_{{ resource.name }}_parquet_to_l1",
+        "--ds", exec_ds,
+        "--minio-credentials", minio_str,
+        "--pg-credentials", pg_str,
+        "--config-file", f"schema_config/fakestore_raw/{{ resource.name }}_schema_config.json",
+        "--target-schema", "l1",
+        "--load-mode", "{{ resource.load_mode or 'replace_partition' }}",
+    ]
+
+    env = {**os.environ, "PYTHONPATH": PROJECT_ROOT}
+    subprocess.run(cmd, check=True, cwd=PROJECT_ROOT, env=env)
+
+with DAG(
+    dag_id=f"02_{{ '%02d'|format(resource.order) }}_dag_{{ project }}_load_{{ resource.name }}",
+    start_date=datetime(2025, 1, 1),
+    schedule=None,          # triggered by orchestrator
+    catchup=False,
+    max_active_runs=1,
+    default_args=default_args,
+    tags=["{{ project }}", "load", "l1"],
+) as dag:
+
+    t00_start = EmptyOperator(task_id="t00_start")
+    t10_run = PythonOperator(
+        task_id="t10_run_load_{{ resource.name }}",
+        python_callable=_run_load,
+        op_kwargs={"exec_ds": "{{ dag_run.conf.get('ds', ds) }}"},
+    )
+
+    t90_finish = EmptyOperator(task_id="t90_finish")
+
+    t00_start >> t10_run >> t90_finish

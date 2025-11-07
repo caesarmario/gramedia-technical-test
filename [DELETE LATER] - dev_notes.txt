@@ -1,8 +1,8 @@
 TO DO:
 [P1]
 - tambahkan try except di setiap scriptnya
-- untuk carts, ditambahin satu proses etl utils sendiri (function) dan template jinja if...
-- cek fungsi di etl utils yang gak kepakai --> buang
+- REVIEW SCRIPT
+- delete resolve params di semua dag
 
 [P2]
 - Sample output folder
@@ -16,6 +16,8 @@ TO DO:
     - baiknya buat visualisasi datanya dari output folder atau konek ke docker(?)
 
 [P3]
+- ubah dag flownya biar gk kebanyakan
+- rename filename for better readibility
 - Render scripts py
 - Comment dan masing masing function comment (how to use, human writings)
 - alert di telegram?
@@ -37,3 +39,22 @@ MINIO_CONFIG
   "MINIO_BUCKET_RAW": "raw-fakestore"
   "MINIO_BUCKET_STG": "stg-fakestore"
 }
+
+DBT_PG_CONFIG
+{
+    "DBT_PG_HOST": "host.docker.internal",
+    "DBT_PG_USER": "postgres",
+    "DBT_PG_PASSWORD": "admin123",
+    "DBT_PG_PORT": "5438",
+    "DBT_PG_DBNAME": "postgres"
+}
+
+POSTGRESQL_CONFIG
+{
+    "POSTGRES_USER": "postgres",
+    "POSTGRES_PASSWORD": "admin123",
+    "POSTGRES_DB": "dwh",
+    "POSTGRES_PORT": "5438",
+    "POSTGRES_HOST": "host.docker.internal"
+}
+

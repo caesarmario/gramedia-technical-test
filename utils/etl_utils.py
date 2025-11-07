@@ -9,11 +9,15 @@ from __future__ import annotations
 import json
 import pandas as pd
 import ast
+import re
+import psycopg2
 
-from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 from datetime import datetime
 from io import BytesIO
 from minio import Minio
+from psycopg2 import sql
+from psycopg2.extras import execute_values
 
 class ETLHelper:
 
@@ -87,6 +91,7 @@ class ETLHelper:
             resp.release_conn()
         return data
 
+
     @staticmethod
     def get_json_object(client: "Minio", bucket: str, object_name: str) -> Any:
         raw = ETLHelper.get_bytes_object(client, bucket, object_name)
@@ -102,34 +107,6 @@ class ETLHelper:
         if not records:
             return pd.DataFrame()
         return pd.json_normalize(records, sep=sep)
-
-
-    @staticmethod
-    def _apply_explode(df: pd.DataFrame, list_path: Optional[str]) -> pd.DataFrame:
-        if not list_path:
-            return df
-
-        if list_path not in df.columns:
-            return df
-
-        exploded = df.explode(list_path, ignore_index=True)
-        sub = pd.json_normalize(exploded[list_path]).add_prefix(f"{list_path}.")
-        exploded = exploded.drop(columns=[list_path])
-        exploded = pd.concat([exploded.reset_index(drop=True), sub.reset_index(drop=True)], axis=1)
-        return exploded
-    
-
-    @staticmethod
-    def _expand_dict_columns(df: pd.DataFrame, sep: str = ".") -> pd.DataFrame:
-        dict_cols = [c for c in df.columns if df[c].map(lambda v: isinstance(v, Mapping)).any()]
-        for col in dict_cols:
-            expanded = pd.json_normalize(
-                df[col].map(lambda v: v if isinstance(v, Mapping) else {}),
-                sep=sep
-            )
-            expanded.columns = [f"{col}{sep}{c}" for c in expanded.columns]
-            df = pd.concat([df.drop(columns=[col]), expanded], axis=1)
-        return df
     
 
     @staticmethod
@@ -139,90 +116,6 @@ class ETLHelper:
             return df
         df[col] = df[col].map(lambda x: x if isinstance(x, list) else ([] if pd.isna(x) else [x]))
         df = df.explode(col, ignore_index=True)
-        return df
-
-
-    @staticmethod
-    def _select_and_rename(df: pd.DataFrame, columns_cfg: Any) -> pd.DataFrame:
-        if not columns_cfg:
-            return df
-
-        if isinstance(columns_cfg, list):
-            keep = [c for c in columns_cfg if c in df.columns]
-            return df[keep]
-
-        if isinstance(columns_cfg, dict):
-            pairs = [(new, src) for new, src in columns_cfg.items() if src in df.columns]
-            out = {}
-            for new, src in pairs:
-                out[new] = df[src]
-            return pd.DataFrame(out)
-
-        return df
-
-
-    @staticmethod
-    def _coerce_dtypes(df: pd.DataFrame, dtypes_map: Optional[Dict[str, str]]) -> pd.DataFrame:
-        if not dtypes_map:
-            return df
-
-        for col, typ in dtypes_map.items():
-            if col not in df.columns:
-                continue
-            try:
-                if typ.startswith("datetime"):
-                    df[col] = pd.to_datetime(df[col], errors="coerce", utc=False)
-                elif typ in {"int", "int64"}:
-                    df[col] = pd.to_numeric(df[col], errors="coerce").astype("Int64")
-                elif typ in {"float", "float64"}:
-                    df[col] = pd.to_numeric(df[col], errors="coerce")
-                elif typ in {"bool", "boolean"}:
-                    df[col] = df[col].astype("boolean")
-                elif typ in {"string", "str", "object"}:
-                    df[col] = df[col].astype("string")
-                else:
-                    # fallback: let pandas try
-                    df[col] = df[col].astype(typ)
-            except Exception:
-                # keep original if cast fails
-                pass
-        return df
-
-
-    @staticmethod
-    def _apply_simple_transforms(df: pd.DataFrame, tfm: Optional[Dict[str, Any]]) -> pd.DataFrame:
-        if not tfm:
-            return df
-
-        if isinstance(tfm.get("drop"), list):
-            cols = [c for c in tfm["drop"] if c in df.columns]
-            df = df.drop(columns=cols)
-
-        if isinstance(tfm.get("fillna"), dict):
-            for c, v in tfm["fillna"].items():
-                if c in df.columns:
-                    df[c] = df[c].fillna(v)
-
-        if isinstance(tfm.get("lowercase"), list):
-            for c in tfm["lowercase"]:
-                if c in df.columns:
-                    df[c] = df[c].astype("string").str.lower()
-
-        if isinstance(tfm.get("strip"), list):
-            for c in tfm["strip"]:
-                if c in df.columns:
-                    df[c] = df[c].astype("string").str.strip()
-
-        if isinstance(tfm.get("derive_len"), list):
-            for c in tfm["derive_len"]:
-                if c in df.columns:
-                    df[f"{c}_len"] = df[c].astype("string").str.len()
-
-        if isinstance(tfm.get("deduplicate_on"), list) and tfm["deduplicate_on"]:
-            subset = [c for c in tfm["deduplicate_on"] if c in df.columns]
-            if subset:
-                df = df.drop_duplicates(subset=subset, keep="first", ignore_index=True)
-
         return df
 
 
@@ -256,38 +149,7 @@ class ETLHelper:
         norm.columns = [f"{pref}_{c}".replace(".", "_") for c in norm.columns]
         out = pd.concat([out.drop(columns=[col]), norm], axis=1)
         return out
-
-
-    @staticmethod
-    def explode_and_flatten(df: pd.DataFrame, list_col: str, prefix: str) -> pd.DataFrame:
-        """Explode kolom list (berisi dict atau scalar), lalu flatten jika dict."""
-        if list_col not in df.columns:
-            return df
-
-        out = df.copy()
-        out = out.explode(list_col, ignore_index=True)
-
-        # Kalau setelah explode isinya dict → flatten
-        if out[list_col].apply(lambda x: isinstance(x, dict) or pd.isna(x)).all():
-            norm = pd.json_normalize(out[list_col].apply(lambda x: x or {}))
-            norm.columns = [f"{prefix}_{c}".replace(".", "_") for c in norm.columns]
-            out = pd.concat([out.drop(columns=[list_col]), norm], axis=1)
-        else:
-            # scalar → beri nama kolom tunggal
-            out.rename(columns={list_col: f"{prefix}_value"}, inplace=True)
-
-        return out
-
-
-    @staticmethod
-    def flatten_fields(df: pd.DataFrame, fields: List[str]) -> pd.DataFrame:
-        """Flatten bertingkat berdasarkan daftar path sederhana ('address', 'address_geolocation', ...)."""
-        out = df.copy()
-        for f in fields:
-            out = ETLHelper._flatten_dict_col(out, f)
-        return out
     
-
 
     @staticmethod
     def auto_flatten_dicts(df: pd.DataFrame, max_depth: int = 2) -> pd.DataFrame:
@@ -655,10 +517,193 @@ class ETLHelper:
             tail = [c for c in out.columns if c not in ordered]
             out = out[ordered + tail]
         else:
-            preferred = ["cart_id", "user_id", "order_date", "product_id", "quantity",
-                        "source_url", "fetched_at", "batch_id", "ds"]
+            preferred = ["cart_id", "user_id", "order_date", "product_id", "quantity", "ds"]
             ordered = [c for c in preferred if c in out.columns]
             tail = [c for c in out.columns if c not in ordered]
             out = out[ordered + tail]
 
         return out
+
+
+    @staticmethod
+    def read_parquet_from_minio(client, bucket: str, object_name: str) -> pd.DataFrame:
+        resp = client.get_object(bucket, object_name)
+        try:
+            raw = resp.read()
+        finally:
+            resp.close(); resp.release_conn()
+        return pd.read_parquet(BytesIO(raw))
+
+
+    @staticmethod
+    def create_pg_conn(creds: Dict):
+        conn = psycopg2.connect(
+            host=creds["POSTGRES_HOST"],
+            port=int(creds.get("POSTGRES_PORT", 5432)),
+            user=creds["POSTGRES_USER"],
+            password=creds["POSTGRES_PASSWORD"],
+            dbname=creds["POSTGRES_DB"],
+        )
+        conn.autocommit = True
+        return conn
+
+
+    @staticmethod
+    def _pg_dtype_from_series(s: pd.Series) -> str:
+        if pd.api.types.is_integer_dtype(s):     return "BIGINT"
+        if pd.api.types.is_float_dtype(s):       return "DOUBLE PRECISION"
+        if pd.api.types.is_bool_dtype(s):        return "BOOLEAN"
+        if pd.api.types.is_datetime64_any_dtype(s): return "TIMESTAMP"
+        return "TEXT"
+
+
+    @staticmethod
+    def ensure_schema_psycopg2(conn, schema: str) -> None:
+        with conn.cursor() as cur:
+            cur.execute(sql.SQL("CREATE SCHEMA IF NOT EXISTS {}").format(sql.Identifier(schema)))
+
+
+    @staticmethod
+    def _table_exists(conn, schema: str, table: str) -> bool:
+        q = """
+        SELECT 1
+        FROM information_schema.tables
+        WHERE table_schema=%s AND table_name=%s
+        """
+        with conn.cursor() as cur:
+            cur.execute(q, (schema, table))
+            return cur.fetchone() is not None
+
+
+    @staticmethod
+    def _existing_columns(conn, schema: str, table: str) -> List[str]:
+        q = """
+        SELECT column_name
+        FROM information_schema.columns
+        WHERE table_schema=%s AND table_name=%s
+        """
+        with conn.cursor() as cur:
+            cur.execute(q, (schema, table))
+            return [r[0] for r in cur.fetchall()]
+
+
+    @staticmethod
+    def sync_table_schema_psycopg2(conn, schema: str, table: str, df: pd.DataFrame, ensure_unique_on: Optional[List[str]]=None) -> None:
+        ident = lambda *parts: sql.SQL(".").join(sql.Identifier(p) for p in parts)
+        if not ETLHelper._table_exists(conn, schema, table):
+            # create table
+            cols_sql = sql.SQL(", ").join(
+                sql.SQL("{} {}").format(sql.Identifier(c), sql.SQL(ETLHelper._pg_dtype_from_series(df[c])))
+                for c in df.columns
+            )
+            with conn.cursor() as cur:
+                cur.execute(sql.SQL("CREATE TABLE {} ({})").format(ident(schema, table), cols_sql))
+        else:
+            # add missing columns
+            existing = set(ETLHelper._existing_columns(conn, schema, table))
+            with conn.cursor() as cur:
+                for c in df.columns:
+                    if c not in existing:
+                        cur.execute(
+                            sql.SQL("ALTER TABLE {} ADD COLUMN {} {}").format(
+                                ident(schema, table),
+                                sql.Identifier(c),
+                                sql.SQL(ETLHelper._pg_dtype_from_series(df[c])),
+                            )
+                        )
+        # ensure unique index for upsert
+        if ensure_unique_on:
+            idx_name = f"ux_{table}_{'_'.join(ensure_unique_on)}"
+            cols_id  = sql.SQL(", ").join(sql.Identifier(c) for c in ensure_unique_on)
+            with conn.cursor() as cur:
+                cur.execute(
+                    sql.SQL(
+                        "CREATE UNIQUE INDEX IF NOT EXISTS {} ON {} ({})"
+                    ).format(sql.Identifier(idx_name), ident(schema, table), cols_id)
+                )
+
+
+    @staticmethod
+    def _to_rows(df: pd.DataFrame) -> tuple[list[str], list[tuple]]:
+        """
+        Convert a DataFrame into psycopg2-safe rows:
+        - <NA>/NaN/NaT -> None
+        - pandas/NumPy scalars -> built-in Python (int/float/bool)
+        - pandas.Timestamp -> datetime
+        """
+        def _py(v):
+            # null-like
+            if v is None:
+                return None
+            # pandas NA/NaN/NaT
+            try:
+                if pd.isna(v):
+                    return None
+            except Exception:
+                pass
+            # pandas.Timestamp -> datetime
+            if isinstance(v, pd.Timestamp):
+                return v.to_pydatetime()
+            # objects exposing .item() (NumPy scalars)
+            if hasattr(v, "item"):
+                try:
+                    return v.item()
+                except Exception:
+                    pass
+            # last resort: bool(np.bool_), etc.
+            # (bool/int/float/str already fine)
+            return v
+
+        cols = list(df.columns)
+        rows = [tuple(_py(v) for v in row) for row in df.itertuples(index=False, name=None)]
+        return cols, rows
+
+
+    @staticmethod
+    def insert_dataframe_psycopg2(conn, schema: str, table: str, df: pd.DataFrame, page_size: int = 5000) -> None:
+        cols, rows = ETLHelper._to_rows(df)
+        with conn.cursor() as cur:
+            query = sql.SQL("INSERT INTO {} ({}) VALUES %s").format(
+                sql.SQL(".").join([sql.Identifier(schema), sql.Identifier(table)]),
+                sql.SQL(", ").join(sql.Identifier(c) for c in cols),
+            )
+            execute_values(cur, query.as_string(conn), rows, page_size=page_size)
+
+
+    @staticmethod
+    def truncate_then_insert_psycopg2(conn, schema: str, table: str, df: pd.DataFrame) -> None:
+        with conn.cursor() as cur:
+            cur.execute(sql.SQL("TRUNCATE TABLE {}").format(sql.SQL(".").join([sql.Identifier(schema), sql.Identifier(table)])))
+        ETLHelper.insert_dataframe_psycopg2(conn, schema, table, df)
+
+
+    @staticmethod
+    def delete_partition_psycopg2(conn, schema: str, table: str, where: Dict[str, str]) -> None:
+        if not where:
+            return
+        with conn.cursor() as cur:
+            clauses = [sql.SQL("{} = %s").format(sql.Identifier(k)) for k in where.keys()]
+            q = sql.SQL("DELETE FROM {} WHERE ").format(sql.SQL(".").join([sql.Identifier(schema), sql.Identifier(table)])) + sql.SQL(" AND ").join(clauses)
+            cur.execute(q, tuple(where.values()))
+
+
+    @staticmethod
+    def upsert_dataframe_psycopg2(conn, schema: str, table: str, df: pd.DataFrame, pk_cols: List[str], page_size: int = 5000) -> None:
+        cols, rows = ETLHelper._to_rows(df)
+        cols_id = [sql.Identifier(c) for c in cols]
+        pk_id   = [sql.Identifier(c) for c in pk_cols]
+
+        # build DO UPDATE SET for non-PK cols
+        non_pk = [c for c in cols if c not in pk_cols]
+        set_parts = [
+            sql.SQL("{} = EXCLUDED.{}").format(sql.Identifier(c), sql.Identifier(c))
+            for c in non_pk
+        ]
+        insert_q = sql.SQL("INSERT INTO {} ({}) VALUES %s ON CONFLICT ({}) DO {}").format(
+            sql.SQL(".").join([sql.Identifier(schema), sql.Identifier(table)]),
+            sql.SQL(", ").join(cols_id),
+            sql.SQL(", ").join(pk_id),
+            sql.SQL("NOTHING") if not set_parts else sql.SQL("UPDATE SET ") + sql.SQL(", ").join(set_parts),
+        )
+        with conn.cursor() as cur:
+            execute_values(cur, insert_q.as_string(conn), rows, page_size=page_size)

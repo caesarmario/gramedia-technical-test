@@ -27,7 +27,7 @@ with DAG(
     t00_start = EmptyOperator(task_id="t00_start")
 
     # Group all extract triggers so they run in parallel but are visually grouped
-    with TaskGroup(group_id="tg_extract_all", tooltip="Trigger per-resource extract DAGs") as tg_extract_all:
+    with TaskGroup(group_id="tg_extract_all", tooltip="Trigger per-resource extract DAGs") as t10_extract_all:
 
         {% for r in resources %}
         {% set dag_num   = "%02d"|format(r.order) %}
@@ -59,4 +59,4 @@ with DAG(
     t90_finish = EmptyOperator(task_id="t90_finish")
 
     # Flow: start → [all extracts in group] → trigger next orchestrator → finish
-    t00_start >> tg_extract_all >> t20_trigger_transform_orchestrator >> t90_finish
+    t00_start >> t10_extract_all >> t20_trigger_transform_orchestrator >> t90_finish
