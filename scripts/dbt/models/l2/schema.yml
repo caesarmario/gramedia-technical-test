@@ -1,0 +1,39 @@
+####
+## Gramedia Digital - Data Engineer Take Home Test
+## by Mario Caesar // caesarmario87@gmail.com
+## dbt schema yaml for l2 tables
+####
+
+version: 2
+
+models:
+  - name: dim_product
+    description: "Product dimension for Fakestore L2"
+    columns:
+      - name: product_id
+        tests: [not_null, unique]
+      - name: product_name
+        tests: [not_null]
+      - name: category
+        tests: [not_null]
+      - name: price
+        tests: [not_null]
+  - name: fact_sales
+    description: "Line-level sales fact (cart item × product)"
+    columns:
+      - name: transaction_id
+        tests: [not_null, unique]
+      - name: product_id
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_product')
+              field: product_id
+      - name: quantity
+        tests: [not_null]
+      - name: price
+        tests: [not_null]
+      - name: total_sales
+        tests: [not_null]
+      - name: transaction_date
+        tests: [not_null]
