@@ -22,12 +22,8 @@ def main() -> None:
         "--ds", type=str, required=False,
         help="Execution date YYYY-MM-DD (default: today UTC)"
     )
-    ##### UBAH DISINI
     parser.add_argument(
-        "--credentials", type=str,
-        
-        required=False, default='{"MINIO_ENDPOINT":"127.0.0.1:9200","MINIO_ROOT_USER":"admin","MINIO_ROOT_PASSWORD":"admin123","MINIO_BUCKET_RAW":"raw-fakestore","MINIO_BUCKET_STAGING":"staging-fakestore"}',
-
+        "--credentials", type=str, required=True,
         help="MinIO credentials as JSON string"
     )
 
