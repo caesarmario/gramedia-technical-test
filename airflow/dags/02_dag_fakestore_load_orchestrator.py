@@ -24,7 +24,7 @@ with DAG(
 
     t00_start = EmptyOperator(task_id="t00_start")
 
-    with TaskGroup(group_id="tg_load_resources") as tg_load:
+    with TaskGroup(group_id="tg_load_resources") as t10_load:
         TriggerDagRunOperator(
             task_id="t10_trigger_load_products",
             trigger_dag_id="02_01_dag_fakestore_load_products",
@@ -58,4 +58,4 @@ with DAG(
 
     t90_finish = EmptyOperator(task_id="t90_finish")
 
-    t00_start >> tg_load >> t90_finish
+    t00_start >> t10_load >> t90_finish

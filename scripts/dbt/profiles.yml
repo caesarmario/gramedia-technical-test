@@ -1,0 +1,20 @@
+####
+## Gramedia Digital - Data Engineer Take Home Test
+## by Mario Caesar // caesarmario87@gmail.com
+## dbt Profiles Configuration yaml
+####
+
+fakestore:
+  target: "{{ env_var('DBT_TARGET') }}"
+  outputs:
+
+    # --- Postgres ---
+    dev:
+      type: postgres
+      host: "{{ env_var('DBT_PG_HOST') }}"
+      user: "{{ env_var('DBT_PG_USER') }}"
+      password: "{{ env_var('DBT_PG_PASSWORD') }}"
+      port: "{{ env_var('DBT_PG_PORT') | int }}"
+      dbname: "{{ env_var('DBT_PG_DBNAME') }}"
+      schema: l1
+      threads: 4

@@ -707,3 +707,109 @@ class ETLHelper:
         )
         with conn.cursor() as cur:
             execute_values(cur, insert_q.as_string(conn), rows, page_size=page_size)
+
+
+    @staticmethod
+    def quarantine_dbt_failures_to_minio(
+        pg_conn,
+        minio_client,
+        *,
+        audit_schema: str = "dq_audit",
+        bucket_name: str = "dq-failures",
+        layer: str,
+        resource: str,
+        ds: str,
+    ) -> int:
+        """
+        Export all dbt failure/audit tables from Postgres -> MinIO parquet files.
+
+        Returns number of parquet objects written.
+        """
+
+        # List all failure/audit tables produced by dbt (store_failures: true)
+        sql_list = """
+          select table_name
+          from information_schema.tables
+          where table_schema = %s
+            and (table_name like 'dbt_test__audit%%' or table_name like '%%__failures')
+        """
+
+        with pg_conn.cursor() as cur:
+            cur.execute(sql_list, (audit_schema,))
+            found = [r[0] for r in cur.fetchall()]
+
+        if not found:
+            return 0
+
+        # Ensure MinIO bucket exists
+        ETLHelper.ensure_bucket(minio_client, bucket_name)
+
+        written = 0
+        for tbl in found:
+            with pg_conn.cursor() as cur:
+                cur.execute(f'SELECT * FROM "{audit_schema}"."{tbl}"')
+                rows = cur.fetchall()
+                cols = [d[0] for d in cur.description]
+
+            if not rows:
+                continue
+
+            df = pd.DataFrame(rows, columns=cols)
+            obj = f"{layer}/{resource}/ds={ds}/{tbl}.parquet"
+
+            buf = BytesIO()
+            df.to_parquet(buf, engine="pyarrow", index=False)
+            buf.seek(0)
+
+            minio_client.put_object(
+                bucket_name=bucket_name,
+                object_name=obj,
+                data=buf,
+                length=buf.getbuffer().nbytes,
+                content_type="application/octet-stream",
+            )
+            written += 1
+
+        return written
+    
+
+    @staticmethod
+    def upload_dbt_artifacts_to_minio(
+        minio_client,
+        bucket_name: str,
+        layer: str,
+        resource: str,
+        ds: str,
+        base_dir: str = "/dbt/target",
+        files: list[str] | None = None,
+        prefix: str | None = None,
+    ) -> None:
+        """
+        Push dbt artifacts (run_results.json, manifest.json, catalog.json, index.html)
+        to MinIO at: <bucket>/<layer>/<resource>/ds=<YYYY-MM-DD>/
+        """
+        import os
+        from io import BytesIO
+
+        # default files
+        files = files or ["run_results.json", "manifest.json", "catalog.json", "index.html"]
+        # ensure bucket
+        ETLHelper.ensure_bucket(minio_client, bucket_name)
+
+        # path prefix
+        obj_prefix = prefix or f"{layer}/{resource}/ds={ds}"
+
+        for fname in files:
+            fpath = os.path.join(base_dir, fname)
+            if not os.path.exists(fpath):
+                continue
+            with open(fpath, "rb") as f:
+                data = f.read()
+            content_type = "application/json" if fname.endswith(".json") else "text/html"
+            minio_client.put_object(
+                bucket_name=bucket_name,
+                object_name=f"{obj_prefix}/{fname}",
+                data=BytesIO(data),
+                length=len(data),
+                content_type=content_type,
+            )

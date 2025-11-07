@@ -1,0 +1,32 @@
+####
+## Gramedia Digital - Data Engineer Take Home Test
+## by Mario Caesar // caesarmario87@gmail.com
+## dbt Project Configuration yaml
+####
+
+name: fakestore
+version: '1.0'
+
+config-version: 2
+
+profile: fakestore
+
+model-paths: ["models"]
+macro-paths: ["macros"]
+target-path: "target"
+clean-targets: ["target", "dbt_modules"]
+
+models:
+  fakestore:
+
+    +schema: ""
+
+    # L1
+    l1:
+      +schema: l1
+      +materialized: view
+
+    # DWH
+    dwh:
+      +schema: dwh
+      +materialized: table

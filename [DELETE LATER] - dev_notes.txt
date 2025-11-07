@@ -29,6 +29,7 @@ mHFyTxsbeuhkwd8P
 ## Minio bucket name
 raw-fakestore
 stg-fakestore
+dq-failures
 
 ## Config
 MINIO_CONFIG
@@ -36,17 +37,23 @@ MINIO_CONFIG
   "MINIO_ENDPOINT": "minio:9000",
   "MINIO_ROOT_USER": "admin",
   "MINIO_ROOT_PASSWORD": "admin123",
-  "MINIO_BUCKET_RAW": "raw-fakestore"
-  "MINIO_BUCKET_STG": "stg-fakestore"
+  "MINIO_BUCKET_RAW": "raw-fakestore",
+  "MINIO_BUCKET_STG": "stg-fakestore",
+  "MINIO_BUCKET_DQ": "dq-failures",
+  "MINIO_BUCKET_DQ_REPORTS": "dq-reports"
 }
 
 DBT_PG_CONFIG
 {
+    "DBT_TARGET": "dev",
     "DBT_PG_HOST": "host.docker.internal",
     "DBT_PG_USER": "postgres",
     "DBT_PG_PASSWORD": "admin123",
     "DBT_PG_PORT": "5438",
-    "DBT_PG_DBNAME": "postgres"
+    "DBT_PG_DBNAME": "dwh",
+    "DBT_PROFILES_DIR": "/dbt",
+    "PATH": "/home/airflow/.local/bin:/usr/local/bin:/usr/bin:/bin",
+    "DBT_AUDIT_SCHEMA": "dq_audit"
 }
 
 POSTGRESQL_CONFIG

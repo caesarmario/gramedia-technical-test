@@ -1,0 +1,54 @@
+####
+## Gramedia Digital - Data Engineer Take Home Test
+## by Mario Caesar // caesarmario87@gmail.com
+## dbt models for l1 yaml
+####
+
+version: 2
+
+sources:
+  - name: fakestore_l1
+    database: dwh
+    schema: l1
+
+    tables:
+      - name: products
+        columns:
+          - name: product_id
+            tests: [not_null, unique]
+          - name: title
+            tests: [not_null]
+          - name: price
+            tests: [not_null]
+          - name: ds
+            tests: [not_null]
+
+      - name: users
+        columns:
+          - name: user_id
+            tests: [not_null, unique]
+          - name: email
+            tests: [not_null]
+          - name: ds
+            tests: [not_null]
+
+      - name: carts
+        columns:
+          - name: cart_id
+            tests: [not_null]
+          - name: user_id
+            tests:
+              - not_null
+              - relationships:
+                  to: source('fakestore_l1','users')
+                  field: user_id
+          - name: product_id
+            tests:
+              - not_null
+              - relationships:
+                  to: source('fakestore_l1','products')
+                  field: product_id
+          - name: quantity
+            tests: [not_null]
+          - name: ds
+            tests: [not_null]
