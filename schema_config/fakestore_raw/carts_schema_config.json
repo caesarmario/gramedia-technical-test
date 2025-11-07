@@ -2,18 +2,21 @@
   "_config": {
     "table": "carts",
     "array_path": "data",
-    "primary_key": ["cart_id"],
-    "partition_by": ["load_dt"]
+    "explode": { "path": "products", "prefix": "products" },
+    "primary_key": ["cart_id", "product_id"],
+    "partition_by": ["ds"],
+    "strict": true
   },
-  "cart_id":        { "mapping": "id", "data_type": "INTEGER", "transformation": null, "validation": "not_null" },
-  "user_id":        { "mapping": "userId", "data_type": "INTEGER", "transformation": null, "validation": "not_null" },
-  "cart_date":      { "mapping": "date", "data_type": "DATE", "transformation": "extract_date", "validation": "validate_date" },
-  "cart_ts":        { "mapping": "date", "data_type": "DATETIME", "transformation": null, "validation": "validate_timestamp" },
-  "items_count":    { "mapping": "products", "data_type": "INTEGER", "transformation": "len", "validation": "non_negative_integer" },
-  "total_quantity": { "mapping": "products[].quantity", "data_type": "INTEGER", "transformation": "sum", "validation": "non_negative_integer" },
-  "product_ids":    { "mapping": "products[].productId", "data_type": "STRING", "transformation": "join(',')", "validation": null },
-  "source_url":     { "mapping": "meta.source", "data_type": "STRING", "transformation": null, "validation": null },
-  "fetched_at":     { "mapping": "meta.fetched_at", "data_type": "DATETIME", "transformation": null, "validation": "validate_timestamp" },
-  "batch_id":       { "mapping": "batch_id", "data_type": "STRING", "transformation": null, "validation": null },
-  "load_dt":        { "mapping": "load_dt", "data_type": "TIMESTAMP", "transformation": null, "validation": null }
+
+  "cart_id":    { "mapping": "id",                  "data_type": "INTEGER"  },
+  "user_id":    { "mapping": "userId",              "data_type": "INTEGER"  },
+  "order_date": { "mapping": "date",                "data_type": "DATETIME" },
+
+  "product_id": { "mapping": "products.productId",  "data_type": "INTEGER"  },
+  "quantity":   { "mapping": "products.quantity",   "data_type": "INTEGER"  },
+
+  "source_url": { "mapping": "meta.source",         "data_type": "STRING"   },
+  "fetched_at": { "mapping": "meta.fetched_at",     "data_type": "DATETIME" },
+  "batch_id":   { "mapping": "batch_id",            "data_type": "STRING"   },
+  "ds":         { "mapping": "ds",                  "data_type": "DATE"     }
 }

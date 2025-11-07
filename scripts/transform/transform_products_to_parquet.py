@@ -22,20 +22,21 @@ def main() -> None:
         "--ds", type=str, required=False,
         help="Execution date YYYY-MM-DD (default: today UTC)"
     )
+    ##### UBAH DISINI
     parser.add_argument(
         "--credentials", type=str,
         
-        required=False, default='{"MINIO_ENDPOINT":"minio:9000","MINIO_ROOT_USER":"admin","MINIO_ROOT_PASSWORD":"admin123","MINIO_BUCKET_RAW":"raw-fakestore","MINIO_BUCKET_STAGING":"staging-fakestore"}',
+        required=False, default='{"MINIO_ENDPOINT":"127.0.0.1:9200","MINIO_ROOT_USER":"admin","MINIO_ROOT_PASSWORD":"admin123","MINIO_BUCKET_RAW":"raw-fakestore","MINIO_BUCKET_STAGING":"staging-fakestore"}',
 
         help="MinIO credentials as JSON string"
     )
+
     parser.add_argument(
         "--config-file", type=str, required=False,
         default="schema_config/fakestore_raw/products_schema_config.json",
         help="Path to transformation config JSON"
     )
     args = parser.parse_args()
-    print(args.credentials)
 
     # Resolve ds & creds
     ds = args.ds or datetime.utcnow().strftime("%Y-%m-%d")

@@ -1,8 +1,9 @@
 TO DO:
 [P1]
-- Sample output
+- tambahkan try except di setiap scriptnya
 
 [P2]
+- Sample output
 - README
     - Setup instructions. 
     - Description of ETL logic. 
