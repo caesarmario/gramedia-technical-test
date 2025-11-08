@@ -1,13 +1,10 @@
 TO DO:
 [P1]
-- tambahkan try except di setiap scriptnya
-- tambahkan logging yang proper
 - REVIEW SCRIPT & RENDER SCRIPTS
+- cek utils file
+- make gitignore better (reorganize)
 - Simplify the DAG process???
 - build semua dari awal, testing spin up etc
-- supaya bisa backfill bagaimana
-
-[P2]
 - README
     - Setup instructions. 
     - Description of ETL logic. 

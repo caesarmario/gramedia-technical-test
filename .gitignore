@@ -1,17 +1,26 @@
-# Byte-compiled / optimized / DLL files
+# Python bytecode & caches
 **/__pycache__/
 **/*.py[cod]
 *$py.class
+
+# Python bytecode (explicit files)
 utils/__pycache__/etl_utils.cpython-312.pyc
 utils/__pycache__/validation_utils.cpython-312.pyc
 utils/__pycache__/logging_utils.cpython-312.pyc
+
+# IDE / Editor settings
 .vscode/
+
+# dbt build artifacts
 scripts/dbt/target
 scripts/dbt/dbt_packages
 scripts/dbt/logs
 
-# Logs
+# Logs (generic)
 *.log
 *.py.log
-airflow/logs/
 logs/
+
+# Airflow runtime artifacts
+airflow/logs/
+airflow/plugins
