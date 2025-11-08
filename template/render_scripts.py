@@ -114,7 +114,7 @@ def gendagextract():
     os.makedirs(outdir, exist_ok=True)
 
     # Orchestrator
-    orch_out = os.path.join(outdir, f"00_dag_{project}_orchestrator.py")
+    orch_out = os.path.join(outdir, f"00_dag_{project}_extract_orchestrator.py")
     with open(orch_out, "w", encoding="utf-8") as f:
         f.write(orc_template.render(ctx_common))
     click.echo(f"Rendered orchestrator → {orch_out}")

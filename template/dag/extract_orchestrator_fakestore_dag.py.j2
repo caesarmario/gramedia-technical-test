@@ -14,7 +14,7 @@ from airflow.utils.task_group import TaskGroup
 default_args = {"owner": "caesarmario87@gmail.com", "retries": 0}
 
 with DAG(
-    dag_id          = "00_dag_{{ project }}_orchestrator",
+    dag_id          = "00_dag_{{ project }}_extract_orchestrator",
     schedule        = "0 1 * * *",
     start_date      = datetime(2025, 1, 1),
     catchup         = False,
