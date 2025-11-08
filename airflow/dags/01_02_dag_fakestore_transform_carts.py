@@ -36,14 +36,14 @@ def _get_var(key: str, default: str) -> str:
 
 
 # Project root inside the container.
-PROJECT_ROOT: str = Variable.get("PROJECT_ROOT", "/opt/airflow")
+PROJECT_ROOT: str = Variable.get("PROJECT_ROOT")
 
 def _run_transform(exec_ds: str, **_: Dict[str, Any]) -> None:
     """
     Invoke the resource-specific transformer via subprocess.
     """
     # Pull MINIO_CONFIG
-    raw = _get_var("MINIO_CONFIG")
+    raw = _get_var("MINIO_CONFIG", "{}")
     try:
         creds_str = json.dumps(json.loads(raw))
     except Exception:

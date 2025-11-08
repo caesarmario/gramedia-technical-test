@@ -1,6 +1,6 @@
 <mxfile host="app.diagrams.net" agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36" version="28.2.7" pages="2">
   <diagram name="architecture_diagram" id="SMEf8CMeevwPTp0WgOkh">
-    <mxGraphModel dx="1083" dy="914" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+    <mxGraphModel dx="632" dy="533" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
@@ -119,6 +119,9 @@
               <mxPoint x="605" y="740" />
             </Array>
           </mxGeometry>
+        </mxCell>
+        <mxCell id="_RhGuSqOZv2WAe1XWSmT-2" value="&lt;font style=&quot;font-size: 10px;&quot;&gt;dbt tests &amp;amp; report&lt;/font&gt;" style="text;html=1;whiteSpace=wrap;align=center;verticalAlign=middle;rounded=0;fillColor=#FFFFFF;" vertex="1" parent="1">
+          <mxGeometry x="535" y="749" width="85" height="15" as="geometry" />
         </mxCell>
       </root>
     </mxGraphModel>
