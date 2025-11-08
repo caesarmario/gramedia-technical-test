@@ -1,0 +1,11 @@
+user_id,username,email,phone,first_name,last_name,address_street,address_number,address_city,address_zip,geo_lat,geo_lng,ds
+1,johnd,john@gmail.com,1-570-236-7033,john,doe,new road,7682,kilcoole,12926-3874,-37.3159,81.1496,2025-11-07
+2,mor_2314,morrison@gmail.com,1-570-236-7033,david,morrison,Lovers Ln,7267,kilcoole,12926-3874,-37.3159,81.1496,2025-11-07
+3,kevinryan,kevin@gmail.com,1-567-094-1345,kevin,ryan,Frances Ct,86,Cullman,29567-1452,40.3467,-30.131,2025-11-07
+4,donero,don@gmail.com,1-765-789-6734,don,romer,Hunters Creek Dr,6454,San Antonio,98234-1734,50.3467,-20.131,2025-11-07
+5,derek,derek@gmail.com,1-956-001-1945,derek,powell,adams St,245,san Antonio,80796-1234,40.3467,-40.131,2025-11-07
+6,david_r,david_r@gmail.com,1-678-345-9856,david,russell,prospect st,124,el paso,12346-0456,20.1677,-10.6789,2025-11-07
+7,snyder,miriam@gmail.com,1-123-943-0563,miriam,snyder,saddle st,1342,fresno,96378-0245,10.3456,20.6419,2025-11-07
+8,hopkins,william@gmail.com,1-478-001-0890,william,hopkins,vally view ln,1342,mesa,96378-0245,50.3456,10.6419,2025-11-07
+9,kate_h,kate@gmail.com,1-678-456-1934,kate,hale,avondale ave,345,miami,96378-0245,40.12456,20.5419,2025-11-07
+10,jimmie_k,jimmie@gmail.com,1-104-001-4567,jimmie,klein,oak lawn ave,526,fort wayne,10256-4532,30.24788,-20.545419,2025-11-07

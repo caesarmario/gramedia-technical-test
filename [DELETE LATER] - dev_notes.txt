@@ -1,43 +1,22 @@
 TO DO:
 [P1]
 - tambahkan try except di setiap scriptnya
-- REVIEW SCRIPT
-- Simplify the process???
+- tambahkan logging yang proper
+- REVIEW SCRIPT & RENDER SCRIPTS
+- Simplify the DAG process???
+- build semua dari awal, testing spin up etc
+- supaya bisa backfill bagaimana
 
 [P2]
-- Sample output (data) folder // (dag 99)
-    TL;DR — Buat 1 DAG ad-hoc “packaging” saja (manual/after L2 success) untuk sekali klik menyiapkan deliverables. Jangan export “all tables” besar-besaran; batasi per-batch ds. Struktur paling ramping:
-    Apa yang diekspor (per ds):
-    L2 (wajib): fact_sales → cleaned_data.csv + dim_product.csv (ini inti deliverable).
-    DQ reports (opsional bagus): run_results.json, manifest.json, catalog.json, index.html, serta parquet failures bila ada.
-    Raw/Staging (opsional, ringan): zip hanya partition ds=... di raw-fakestore/ dan stg-fakestore/ (bukan “all data”).
-    L1 (opsional): sample (mis. 10k rows per table) atau full per ds jika ukuran kecil.
-    Kenapa ini terbaik:
-    Satu DAG “98_dag_fakestore_pack_deliverables” menjaga alat bukti rapi di satu prefix MinIO:
-    s3://deliverables/fakestore/ds=YYYY-MM-DD/…
-    Tidak bloat: fokus L2 (cleaned), arsip per-batch saja untuk raw/stg.
-    Deterministik: trigger setelah L2 + dbt test pass; gagal test → DAG ini tak jalan.
-    Task outline (singkat):
-    t10_export_fact_csv & t11_export_dim_csv (COPY/psycopg2 → CSV ke deliverables/…)
-    t20_copy_dq_reports (ambil dari /dbt/target + parquet failures → deliverables/…)
-    t30_zip_raw_partition & t31_zip_stg_partition (list objek ds=… → zip → upload)
-    (opsional) t40_export_l1_samples
-    That’s it—satu DAG kecil, on-demand, hasil lengkap, tanpa overkill ekspor “all tables” setiap run.
-    
 - README
     - Setup instructions. 
     - Description of ETL logic. 
     - Explanation of data validation. 
     - Diagram of your pipeline.
-- supaya bisa backfill bagaimana
-- Include visualizations or metrics summary in a notebook.
-    - baiknya buat visualisasi datanya dari output folder atau konek ke docker(?)
 
 [P3]
 - ubah dag flownya biar gk kebanyakan
-- Render scripts py
 - Comment dan masing masing function comment (how to use, human writings)
-- alert di telegram?
 
 
 ## Airflow pass:
@@ -47,6 +26,7 @@ mHFyTxsbeuhkwd8P
 raw-fakestore
 stg-fakestore
 dq-failures
+dq-reports
 
 ## Config
 MINIO_CONFIG
