@@ -5,6 +5,7 @@
 ####
 
 import json
+from datetime import datetime, timedelta
 
 from airflow import DAG
 from airflow.sdk import Variable
@@ -12,17 +13,14 @@ from airflow.providers.standard.operators.empty import EmptyOperator
 from airflow.providers.standard.operators.bash import BashOperator
 from airflow.providers.standard.operators.python import PythonOperator
 from airflow.task.trigger_rule import TriggerRule
-from datetime import datetime, timedelta
 
 from utils.etl_utils import ETLHelper
 
 
-# --- Defaults ---
 default_args = {"owner": "caesarmario87@gmail.com", "retries": 2, "retry_delay": timedelta(minutes=2)}
 
-
 def _dbt_env() -> dict:
-    """dbt env from Airflow Variable DBT_PG_CONFIG (and optional extras)."""
+    """dbt env from Airflow Variable"""
     cfg = json.loads(Variable.get("DBT_PG_CONFIG"))
     cfg.setdefault("DBT_TARGET", cfg.get("DBT_TARGET"))
     cfg.setdefault("DBT_PROFILES_DIR")
@@ -37,6 +35,7 @@ def _quarantine_failures(exec_ds: str, **_) -> None:
     minio_cfg    = json.loads(Variable.get("MINIO_CONFIG"))
     bucket_dq    = minio_cfg.get("MINIO_BUCKET_DQ")
 
+    # Bootstrap clients for Postgres and MinIO.
     pg_conn   = ETLHelper.create_pg_conn({
         "POSTGRES_HOST": pg_cfg["POSTGRES_HOST"],
         "POSTGRES_PORT": pg_cfg["POSTGRES_PORT"],
@@ -47,6 +46,7 @@ def _quarantine_failures(exec_ds: str, **_) -> None:
     minio_cli = ETLHelper.create_minio_client(minio_cfg)
 
     try:
+        # Central helper will scan audit tables, extract failure rows, and upload parquet to MinIO.
         ETLHelper.quarantine_dbt_failures_to_minio(
             pg_conn, minio_cli,
             audit_schema=audit_schema,
@@ -61,6 +61,7 @@ def _quarantine_failures(exec_ds: str, **_) -> None:
 
 def _upload_dbt_artifacts(exec_ds: str, **_) -> None:
     """Upload dbt artifacts for L2 to MinIO."""
+    
     minio_cfg = json.loads(Variable.get("MINIO_CONFIG"))
     client    = ETLHelper.create_minio_client(minio_cfg)
     bucket    = minio_cfg.get("MINIO_BUCKET_DQ_REPORTS")
@@ -85,10 +86,10 @@ with DAG(
     tags=["fakestore", "l2", "dbt", "dq"],
 ) as dag:
 
+    # Start anchor
     t00_start = EmptyOperator(task_id="t00_start")
 
-    # Build L2 models + run L2 tests (acts as the quality gate)
-    # Select all models under models/l2; pass batch_ds to models if they use it.
+    # Build L2 models + run L2 tests; pass batch_ds to models if they use it.
     t10_dbt_build_l2 = BashOperator(
         task_id="t10_dbt_build_l2",
         bash_command="""
@@ -98,7 +99,7 @@ with DAG(
         env=_dbt_env(),
     )
 
-    # Generate docs/catalog for reporting bundle (run even if build fails, to capture state)
+    # Generate docs/catalog for reporting bundle
     t20_dbt_docs_generate = BashOperator(
         task_id="t20_dbt_docs_generate",
         bash_command="""
@@ -109,7 +110,7 @@ with DAG(
         trigger_rule=TriggerRule.ALL_DONE,
     )
 
-    # Upload artifacts (run_results.json, manifest.json, catalog.json, index.html) to MinIO
+    # Upload artifacts to MinIO
     t21_upload_dbt_artifacts = PythonOperator(
         task_id="t21_upload_dbt_artifacts",
         python_callable=_upload_dbt_artifacts,
@@ -117,7 +118,7 @@ with DAG(
         trigger_rule=TriggerRule.ALL_DONE,
     )
 
-    # Export failing rows (store_failures) to MinIO even when tests fail
+    # Export failing rows to MinIO even when tests fail
     t25_quarantine_failures = PythonOperator(
         task_id="t25_quarantine_failures",
         python_callable=_quarantine_failures,
@@ -125,9 +126,10 @@ with DAG(
         trigger_rule=TriggerRule.ALL_DONE,
     )
 
+    # End anchor for the graph
     t90_finish = EmptyOperator(task_id="t90_finish")
 
-    # chaining
+    # Flow: Build first; then regardless of result, produce docs and upload artifacts/quarantine outputs.
     t00_start >> t10_dbt_build_l2
     t10_dbt_build_l2 >> t20_dbt_docs_generate >> t21_upload_dbt_artifacts
     t10_dbt_build_l2 >> t25_quarantine_failures
