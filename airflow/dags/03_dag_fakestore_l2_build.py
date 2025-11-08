@@ -8,7 +8,7 @@ import json
 from datetime import datetime, timedelta
 
 from airflow import DAG
-from airflow.sdk import Variable
+from airflow.models import Variable
 from airflow.providers.standard.operators.empty import EmptyOperator
 from airflow.providers.standard.operators.bash import BashOperator
 from airflow.providers.standard.operators.python import PythonOperator
