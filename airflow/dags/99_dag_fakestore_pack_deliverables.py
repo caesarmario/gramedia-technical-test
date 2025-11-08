@@ -25,7 +25,7 @@ from utils.logging_utils import logger
 
 
 # -------- Defaults & constants --------
-default_args = {"owner": "data-eng", "retries": 1, "retry_delay": timedelta(minutes=1)}
+default_args = {"owner": "caesarmario87@gmail.com", "retries": 1, "retry_delay": timedelta(minutes=1)}
 
 # Base local output dir (inside project)
 SAMPLE_OUTPUT_DIR: str = Variable.get(

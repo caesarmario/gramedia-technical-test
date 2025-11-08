@@ -18,7 +18,7 @@ from utils.etl_utils import ETLHelper
 
 
 # --- Defaults ---
-default_args = {"owner": "data-eng", "retries": 2, "retry_delay": timedelta(minutes=2)}
+default_args = {"owner": "caesarmario87@gmail.com", "retries": 2, "retry_delay": timedelta(minutes=2)}
 
 
 def _dbt_env() -> dict:

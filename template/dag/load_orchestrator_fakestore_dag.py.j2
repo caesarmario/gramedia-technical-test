@@ -4,30 +4,36 @@
 ## DAG Orchestrator: trigger all L1 loads
 ####
 
+from datetime import datetime, timedelta
+
 from airflow import DAG
 from airflow.operators.empty import EmptyOperator
 from airflow.operators.trigger_dagrun import TriggerDagRunOperator
 from airflow.utils.task_group import TaskGroup
-from datetime import datetime, timedelta
 
-default_args = {"owner": "data-eng", "retries": 0}
+
+default_args = {"owner": "caesarmario87@gmail.com", "retries": 0}
 
 with DAG(
     dag_id="02_dag_{{ project }}_load_orchestrator",
     start_date=datetime(2025, 1, 1),
-    schedule=None,          # typically triggered by Transform orchestrator
+    schedule=None,
     catchup=False,
     max_active_runs=1,
     default_args=default_args,
     tags=["{{ project }}", "orchestrator", "load", "l1"],
 ) as dag:
 
+    # Start anchor
     t00_start = EmptyOperator(task_id="t00_start")
 
+    # Group all per-resource load triggers (runs in parallel)
     with TaskGroup(group_id="tg_load_resources") as t10_load:
         {% for r in resources %}
         {% set dag_num = "%02d"|format(r.order) %}
         {% set target_id = "02_" ~ dag_num ~ "_dag_" ~ project ~ "_load_" ~ r.name %}
+
+        # Trigger one child load DAG for this resource.
         TriggerDagRunOperator(
             task_id="t10_trigger_load_{{ r.name }}",
             trigger_dag_id="{{ target_id }}",
@@ -40,6 +46,8 @@ with DAG(
         )
         {% endfor %}
 
+    # End anchor
     t90_finish = EmptyOperator(task_id="t90_finish")
 
+    # Flow: start → grouped triggers → finish
     t00_start >> t10_load >> t90_finish

@@ -1,12 +1,14 @@
 ####
 ## Gramedia Digital - Data Engineer Take Home Test
 ## by Mario Caesar // caesarmario87@gmail.com
-## DAG: Load "products" Parquet → L1 + dbt test + quarantine + report upload
+## DAG: Load "products" Parquet --> L1 + dbt test + quarantine + report upload
 ####
 
-import os, json, subprocess
-from io import BytesIO
+import os
+import json
+import subprocess
 import pandas as pd
+from io import BytesIO
 
 from airflow import DAG
 from airflow.models import Variable
@@ -19,13 +21,14 @@ from datetime import datetime, timedelta
 from utils.etl_utils import ETLHelper
 
 
-# --- Airflow defaults ---
-default_args = {"owner": "data-eng", "retries": 2, "retry_delay": timedelta(minutes=2)}
-PROJECT_ROOT: str = Variable.get("PROJECT_ROOT", "/opt/airflow")
+default_args = {"owner": "caesarmario87@gmail.com", "retries": 2, "retry_delay": timedelta(minutes=2)}
+PROJECT_ROOT = "/opt/airflow"
 
 
 def _run_load(exec_ds: str, **_) -> None:
-    """Load L1 via the psycopg2 loader script."""
+    """
+    Load L1 via the psycopg2 loader script.
+    """
     raw_minio = Variable.get("MINIO_CONFIG")
     raw_pg    = Variable.get("POSTGRESQL_CONFIG")
     try:
@@ -41,7 +44,7 @@ def _run_load(exec_ds: str, **_) -> None:
         "python", "-m", f"scripts.load.load_products_parquet_to_l1",
         "--ds", exec_ds,
         "--minio-credentials", minio_str,
-        "--pg-credentials",    pg_str,
+        "--pg-credentials",  pg_str,
         "--config-file", f"schema_config/fakestore_raw/products_schema_config.json",
         "--target-schema", "l1",
         "--load-mode", "replace_partition",
@@ -51,14 +54,19 @@ def _run_load(exec_ds: str, **_) -> None:
 
 
 def _dbt_env() -> dict:
-    """dbt env from Airflow Variable DBT_PG_CONFIG (and optional extras)."""
+    """
+    Build the environment for dbt CLI.
+    """
     cfg = json.loads(Variable.get("DBT_PG_CONFIG"))
-    cfg.setdefault("DBT_TARGET", cfg.get("DBT_TARGET", "dev"))
-    cfg.setdefault("DBT_PROFILES_DIR", "/dbt")
+    cfg.setdefault("DBT_TARGET", cfg.get("DBT_TARGET"))
+    cfg.setdefault("DBT_PROFILES_DIR")
     return cfg
 
 
 def _quarantine_failures(exec_ds: str, **_) -> None:
+    """
+    Export any dbt test failures into MinIO as a quarantine bundle.
+    """
     dbt_cfg      = json.loads(Variable.get("DBT_PG_CONFIG"))
     audit_schema = dbt_cfg.get("DBT_AUDIT_SCHEMA")
     pg_cfg       = json.loads(Variable.get("POSTGRESQL_CONFIG"))
@@ -84,13 +92,16 @@ def _quarantine_failures(exec_ds: str, **_) -> None:
             ds=exec_ds,
         )
     finally:
-        pg_conn.close()
+        pg_conn.close()  # always close the DB connection
 
 
 def _upload_dbt_artifacts(exec_ds: str, **_) -> None:
-    cfg       = json.loads(Variable.get("MINIO_CONFIG"))
-    client    = ETLHelper.create_minio_client(cfg)
-    bucket    = cfg.get("MINIO_BUCKET_DQ_REPORTS")
+    """
+    Push dbt target artifacts to MinIO.
+    """
+    cfg    = json.loads(Variable.get("MINIO_CONFIG"))
+    client = ETLHelper.create_minio_client(cfg)
+    bucket = cfg.get("MINIO_BUCKET_DQ_REPORTS")
 
     ETLHelper.upload_dbt_artifacts_to_minio(
         minio_client=client,
@@ -112,15 +123,17 @@ with DAG(
     tags=["fakestore", "load", "l1"],
 ) as dag:
 
+    # Start anchors
     t00_start = EmptyOperator(task_id="t00_start")
 
+    # Load step
     t10_run = PythonOperator(
         task_id="t10_run_load_products",
         python_callable=_run_load,
         op_kwargs={"exec_ds": "{{ dag_run.conf.get('ds', ds) }}"},
     )
 
-    # HARD GATE: dbt tests must pass (severity:error -> nonzero -> stop)
+    # HARD GATE: fail the DAG run if dbt tests for the L1 source fail
     t20_dbt_test_l1 = BashOperator(
         task_id="t20_dbt_test_l1",
         bash_command="""
@@ -130,7 +143,7 @@ with DAG(
         env=_dbt_env(),
     )
 
-    # Generate catalog & docs for report bundle
+    # Generate docs/catalog
     t21_dbt_docs_generate = BashOperator(
         task_id="t21_dbt_docs_generate",
         bash_command="""
@@ -140,25 +153,27 @@ with DAG(
         env=_dbt_env(),
     )
 
-    # Upload artifacts ke MinIO (jalan walau test fail)
+    # Upload dbt artifacts to MinIO
     t22_upload_dbt_artifacts = PythonOperator(
         task_id="t22_upload_dbt_artifacts",
         python_callable=_upload_dbt_artifacts,
         op_kwargs={"exec_ds": "{{ dag_run.conf.get('ds', ds) }}"},
-        trigger_rule=TriggerRule.ALL_DONE,
+        trigger_rule=TriggerRule.ALL_DONE,  # run regardless of upstream status
     )
 
-    # QUARANTINE: always try to export failing rows to MinIO, even if tests failed
+    # Attempt to quarantine failing rows
     t25_quarantine_failures = PythonOperator(
         task_id="t25_quarantine_failures",
         python_callable=_quarantine_failures,
         op_kwargs={"exec_ds": "{{ dag_run.conf.get('ds', ds) }}"},
-        trigger_rule=TriggerRule.ALL_DONE,
+        trigger_rule=TriggerRule.ALL_DONE,  # run regardless of upstream status
     )
 
+    # End anchor
     t90_finish = EmptyOperator(task_id="t90_finish")
 
-    # chaining
+    # Flow:
+    # start → load L1 → dbt test → (docs + upload artifacts) and (quarantine) → finish
     t00_start >> t10_run >> t20_dbt_test_l1
     t20_dbt_test_l1 >> t21_dbt_docs_generate >> t22_upload_dbt_artifacts
     t20_dbt_test_l1 >> t25_quarantine_failures

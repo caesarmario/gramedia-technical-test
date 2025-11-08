@@ -1,7 +1,7 @@
 ####
 ## Gramedia Digital - Data Engineer Take Home Test
 ## by Mario Caesar // caesarmario87@gmail.com
-## Makefile
+## Makefile for docker compose command
 ####
 
 PROJECT_NAME ?= gramedia-de
