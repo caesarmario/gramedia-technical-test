@@ -60,28 +60,38 @@ def cli():
 # --------------------------------------------------------------------------------
 @cli.command()
 def gendagextract():
+    """
+    CLI command to generate extract dag (extract data from api for each sources and orchestartor)
+    py .\template\render_scripts.py gendagextract
+    """
 
+    # Jinja template name
     orc_tpl_name = "extract_orchestrator_fakestore_dag.py.j2"
     dag_tpl_name = "extract_fakestore_dag.py.j2"
 
+    # Yaml template name & location
     cfg_base = "template/dag/config/extract_fakestore_resources"
     cfg_path = f"{cfg_base}.yaml"
     cfg = get_config(cfg_path)
 
+    # Get the meta
     project   = cfg.get("project")
     base_url  = cfg.get("base_url")
     resources = cfg.get("resources")
 
+    # For numerical purposes in dag name
     enriched = []
     for i, r in enumerate(resources, start=1):
         rr = dict(r)
         rr.setdefault("order", i)
         enriched.append(rr)
 
+    # Template directory
     tpl_dir = "template/dag"
     orc_template = get_template(tpl_dir, orc_tpl_name)
     dag_template = get_template(tpl_dir, dag_tpl_name)
 
+    # ds
     ds_literal = "{{ ds }}"
 
     class _MacroConf:
@@ -99,14 +109,17 @@ def gendagextract():
         "dag_run": _MacroDagRun(),
     }
 
+    # Output location
     outdir = os.path.join("airflow", "dags")
     os.makedirs(outdir, exist_ok=True)
 
+    # Orchestrator
     orch_out = os.path.join(outdir, f"00_dag_{project}_orchestrator.py")
     with open(orch_out, "w", encoding="utf-8") as f:
         f.write(orc_template.render(ctx_common))
     click.echo(f"Rendered orchestrator → {orch_out}")
 
+    # Per-resource DAGs
     for r in enriched:
         content = dag_template.render({**ctx_common, "resource": r})
         dag_out = os.path.join(
@@ -121,32 +134,35 @@ def gendagextract():
 @cli.command()
 def gendagtransform():
     """
-    Render the Transform DAGs:
-    - Orchestrator: 01_dag_{project}_transform_orchestrator.py
-    - Per resource: 01_{order}_dag_{project}_transform_{resource}.py
+    CLI command to generate transform dag (transform for each json sources data to parquet and orchestartor)
+    py .\template\render_scripts.py gendagtransform
     """
+
+    # Jinja template name
     orc_tpl_name = "transform_orchestrator_fakestore_dag.py.j2"
     dag_tpl_name = "transform_fakestore_dag.py.j2"
 
-    # Reuse the same resources config used by extract
+    # Yaml template name & location
     cfg_path = "template/dag/config/extract_fakestore_resources.yaml"
     cfg = get_config(cfg_path)
 
+    # Get the meta
     project = cfg.get("project")
     resources = cfg.get("resources") or []
 
-    # Ensure each resource has a stable order (1-based)
+    # For numerical purposes in dag name
     enriched = []
     for i, r in enumerate(resources, start=1):
         rr = dict(r)
         rr.setdefault("order", i)
         enriched.append(rr)
 
+    # Template directory
     tpl_dir = "template/dag"
     orc_template = get_template(tpl_dir, orc_tpl_name)
     dag_template = get_template(tpl_dir, dag_tpl_name)
 
-    # Provide Jinja-friendly macros for ds and dag_run.conf.get('ds', ds)
+    # ds
     ds_literal = "{{ ds }}"
 
     class _MacroConf:
@@ -164,6 +180,7 @@ def gendagtransform():
         "dag_run": _MacroDagRun(),
     }
 
+    # Output location
     outdir = os.path.join("airflow", "dags")
     os.makedirs(outdir, exist_ok=True)
 
@@ -188,10 +205,10 @@ def gendagtransform():
 @cli.command()
 def gendagload() -> None:
     """
-    Render DAGs for the LOAD stage:
-    - Orchestrator:  02_dag_{project}_load_orchestrator.py
-    - Per resource:  02_{order}_dag_{project}_load_{name}.py
+    CLI command to generate load dag (load for each sources to db and orchestartor)
+    py .\template\render_scripts.py gendagextract
     """
+
     # --- Template names ---
     orc_tpl_name = "load_orchestrator_fakestore_dag.py.j2"
     dag_tpl_name = "load_fakestore_dag.py.j2"
@@ -260,7 +277,10 @@ def gendagload() -> None:
 # --------------------------------------------------------------------------------
 @cli.command()
 def genscriptextract():
-
+    """
+    Render extract scripts from Jinja
+    """
+    # filename
     filename  = "extract_fakestore_template"
     config    = "extract_fakestore_config"
     
@@ -273,7 +293,8 @@ def genscriptextract():
     tpl_dir  = "template/script"
     tpl_name = f"{filename}.py.j2"
     template = get_template(tpl_dir, tpl_name)
-
+    
+    # Output directory
     out_dir = "scripts/extract"
     os.makedirs(out_dir, exist_ok=True)
 
@@ -300,6 +321,7 @@ def genscriptextract():
 
 @cli.command()
 def genscripttransform():
+    # yaml config file location & get config
     cfg_path = "template/script/config/extract_fakestore_config.yaml"
     cfg = get_config(cfg_path)
 
@@ -307,7 +329,8 @@ def genscripttransform():
     if not extract:
         click.echo(f"No resources found in {cfg_path}", err=True)
         return
-
+    
+    # template location & name
     tpl_dir = "template/script"
     tpl_name = "transform_fakestore_to_parquet.py.j2"
     template = get_template(tpl_dir, tpl_name)
@@ -315,8 +338,8 @@ def genscripttransform():
     outdir = os.path.join("scripts", "transform")
     os.makedirs(outdir, exist_ok=True)
 
+    # Render transform script
     for key, r in extract.items():
-        # prefer explicit resource_name from config; fallback to dict key
         res_name = (r or {}).get("resource_name") or key
         endpoint = (r or {}).get("endpoint_path") or ""
 
@@ -336,19 +359,19 @@ def genscripttransform():
 @cli.command()
 def genscriptload():
     """
-    Render loader scripts from Jinja:
-      template: template/script/load_fakestore_parquet_to_pg.py.j2
-      config  : template/script/config/extract_fakestore_config.yaml
-      output  : scripts/load/load_<resource>_parquet_to_pg.py
+    Render loader scripts from Jinja
     """
+
+    # Template dir. & name & config yaml
     tpl_dir = "template/script"
     tpl_name = "load_fakestore_to_l1.py.j2"
     cfg_path = "template/script/config/extract_fakestore_config.yaml"
 
+    # Load script config
     cfg = get_config(cfg_path)
-    resources = cfg.get("extract", {})  # { products: {...}, carts: {...}, users: {...} }
+    resources = cfg.get("extract", {})
 
-    # sane defaults per resource (override by adding keys into your YAML later if you want)
+    # Defaults per resource --> can be adjusted in yaml file
     load_defaults = {
         "products": {
             "target_table": "dim_products",
@@ -367,13 +390,14 @@ def genscriptload():
         },
     }
 
+    # Get template & location output
     template = get_template(tpl_dir, tpl_name)
 
     outdir = os.path.join("scripts", "load")
     os.makedirs(outdir, exist_ok=True)
 
+    # Render process
     for key, spec in resources.items():
-        # prefer explicit resource_name from YAML; else fallback to key
         name = spec.get("resource_name", key)
 
         meta = load_defaults.get(name, {})
