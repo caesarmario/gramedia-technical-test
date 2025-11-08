@@ -36,7 +36,7 @@ def _get_var(key: str, default: str) -> str:
 
 
 # Project root inside the container.
-PROJECT_ROOT = "/opt/airflow"
+PROJECT_ROOT: str = Variable.get("PROJECT_ROOT", "/opt/airflow")
 
 def _run_transform(exec_ds: str, **_: Dict[str, Any]) -> None:
     """

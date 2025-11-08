@@ -21,8 +21,8 @@ default_args = {
 }
 
 # Project/paths inside the container
-PROJECT_ROOT = "/opt/airflow"
-BASE_URL = "https://fakestoreapi.com"
+PROJECT_ROOT: str = Variable.get("PROJECT_ROOT", default_var="/opt/airflow")
+BASE_URL: str     = Variable.get("FAKESTORE_BASE_URL", default_var="https://fakestoreapi.com")
 
 def _run_extract(exec_ds: str, **_) -> None:
     """

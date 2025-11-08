@@ -22,7 +22,7 @@ from utils.etl_utils import ETLHelper
 
 
 default_args = {"owner": "caesarmario87@gmail.com", "retries": 2, "retry_delay": timedelta(minutes=2)}
-PROJECT_ROOT = "/opt/airflow"
+PROJECT_ROOT: str = Variable.get("PROJECT_ROOT", "/opt/airflow")
 
 
 def _run_load(exec_ds: str, **_) -> None:
