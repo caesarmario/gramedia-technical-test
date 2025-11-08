@@ -1,3 +1,9 @@
+####
+## Gramedia Digital - Data Engineer Take Home Test
+## by Mario Caesar // caesarmario87@gmail.com
+## Yaml config to be used in jinja template for Py scripts
+####
+
 extract:
   products:
     class_name: Products

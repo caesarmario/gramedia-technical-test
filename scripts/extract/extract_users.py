@@ -14,6 +14,7 @@ from utils.api_utils import APIHelper
 from utils.etl_utils import ETLHelper
 
 def main():
+    # --- CLI: parse runtime arguments (ds, credentials, base-url) ---
     parser = argparse.ArgumentParser(
         description="Extract 'users' (FakeStore API) to MinIO as JSON"
     )
@@ -31,8 +32,10 @@ def main():
     )
     args = parser.parse_args()
 
-    # Resolve ds and credentials
+    # --- Resolve ds (defaults to today's UTC date) ---
     ds = args.ds or datetime.utcnow().strftime("%Y-%m-%d")
+
+    # --- Parse credentials JSON string ---
     try:
         creds = json.loads(args.credentials)
     except Exception as e:
@@ -41,27 +44,60 @@ def main():
     resource_name = "users"
     endpoint_path = "users"
 
-    # -------- Orchestration (build → fetch → write) --------
-    url = ETLHelper.build_url(args.base_url, endpoint_path)
-    logger.info("[%s] GET %s", resource_name, url)
+    # -------- Orchestration (build --> fetch --> write) process --------
+    # 1) Build request URL from base + endpoint path
+    try:
+        url = ETLHelper.build_url(args.base_url, endpoint_path)
+        logger.info("[%s] GET %s", resource_name, url)
+    except Exception:
+        logger.exception("Failed to build URL (base_url=%s, endpoint=%s)", args.base_url, endpoint_path)
+        raise SystemExit(1)
 
-    data = APIHelper.get_json(url)
-    payload = {
-        "meta": {
-            "source": url,
-            "fetched_at": datetime.utcnow().isoformat(timespec="seconds") + "Z",
-            "count": len(data) if isinstance(data, list) else 1,
-        },
-        "data": data,
-    }
+    # 2) Call API and capture JSON payload
+    try:
+        data = APIHelper.get_json(url)
+        logger.info("[%s] API OK: type=%s; count=%s",
+                    resource_name, type(data).__name__,
+                    (len(data) if isinstance(data, list) else 1))
+    except Exception:
+        logger.exception("HTTP GET/JSON parse failed for url=%s", url)
+        raise SystemExit(1)
 
-    bucket_raw = creds.get("MINIO_BUCKET_RAW")
-    object_name = ETLHelper.build_object_name(resource_name, ds)
-    client = ETLHelper.create_minio_client(creds)
-    ETLHelper.ensure_bucket(client, bucket_raw)
-    ETLHelper.put_json(client, bucket_raw, object_name, payload)
+    # 3) Compose envelope with basic metadata
+    try:
+        payload = {
+            "meta": {
+                "source": url,
+                "fetched_at": datetime.utcnow().isoformat(timespec="seconds") + "Z",
+                "count": len(data) if isinstance(data, list) else 1,
+            },
+            "data": data,
+        }
+    except Exception:
+        logger.exception("Failed to build payload envelope for resource=%s", resource_name)
+        raise SystemExit(1)
 
-    logger.info("[%s] Uploaded → s3://%s/%s", resource_name, bucket_raw, object_name)
+    # 4) Persist to MinIO (RAW bucket) under a ds-based object key
+    try:
+        bucket_raw = creds.get("MINIO_BUCKET_RAW")
+        if not bucket_raw:
+            logger.error("MINIO_BUCKET_RAW is missing in credentials")
+            raise SystemExit(1)
+
+        object_name = ETLHelper.build_object_name(resource_name, ds)
+        logger.info("[%s] Preparing upload: bucket=%s object=%s", resource_name, bucket_raw, object_name)
+
+        client = ETLHelper.create_minio_client(creds)
+        ETLHelper.ensure_bucket(client, bucket_raw)
+        ETLHelper.put_json(client, bucket_raw, object_name, payload)
+
+        logger.info("[%s] Uploaded → s3://%s/%s", resource_name, bucket_raw, object_name)
+    except SystemExit:
+        # re-raise clean exits without double logging
+        raise
+    except Exception:
+        logger.exception("MinIO upload failed (bucket=%s, resource=%s, ds=%s)", bucket_raw, resource_name, ds)
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":
